@@ -49,6 +49,9 @@ func DumpHeap(writer io.Writer, debug int) error {
 }
 
 // DumpBlock dumps the block profile into writer.
+//   - debug = 0: gzip for go tool pprof
+//   - debug >= 1: legacy text format with comments, translating addresses to function names and line numbers, so that a programmer can read the profile without tools
+//   - gops used debug = 2
 func DumpBlock(writer io.Writer, debug int) error {
 	runtime.SetBlockProfileRate(1)
 	defer runtime.SetBlockProfileRate(0)
@@ -56,6 +59,9 @@ func DumpBlock(writer io.Writer, debug int) error {
 }
 
 // DumpThreadCreate dumps the thread-create profile into writer.
+//   - debug = 0: gzip for go tool pprof
+//   - debug >= 1: legacy text format with comments, translating addresses to function names and line numbers, so that a programmer can read the profile without tools
+//   - gops used debug = 2
 func DumpThreadCreate(writer io.Writer, debug int) error {
 	return pprof.Lookup("threadcreate").WriteTo(writer, debug)
 }
@@ -66,6 +72,7 @@ func DumpHeapProfile(writer io.Writer) error {
 }
 
 // DumpCPUProfile dumps the CPU profile into writer for duration.
+//   - duration = 0: 30 seconds
 func DumpCPUProfile(writer io.Writer, duration time.Duration) error {
 	if err := pprof.StartCPUProfile(writer); err != nil {
 		return err
@@ -79,6 +86,7 @@ func DumpCPUProfile(writer io.Writer, duration time.Duration) error {
 }
 
 // DumpTraceProfile dumps the trace into writer for duration.
+//   - duration = 0: 5 seconds
 func DumpTraceProfile(writer io.Writer, duration time.Duration) error {
 	if err := trace.Start(writer); err != nil {
 		return err
