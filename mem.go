@@ -1,6 +1,9 @@
 package hwstats
 
-import "gopkg.in/go-mixed/hwstats.v1/cgroup"
+import (
+	"gopkg.in/go-mixed/hwstats.v1/cgroup"
+	"runtime"
+)
 
 // Main code from https://github.com/pbnjay/memory
 
@@ -51,6 +54,8 @@ func TotalMemory() uint64 {
 	return totalMemory
 }
 
+// MemoryUsage returns the real memory usage, if run in cgroup, it will return
+// the cgroup memory usage, otherwise it will return the system memory usage
 func MemoryUsage() uint64 {
 	if cgroup.RunInCgroup() {
 		if memStat, err := cgroup.GetMemoryStat(); err != nil {
@@ -60,5 +65,32 @@ func MemoryUsage() uint64 {
 		}
 	} else {
 		return SysMemoryUsage()
+	}
+}
+
+type MemoryStats struct {
+	// MemStats is the memory statistics of current process.
+	runtime.MemStats
+	// SysTotalMemory is the total accessible system memory in bytes.
+	SysTotalMemory uint64 `json:"sys_total_memory" yaml:"sys_total_memory"`
+	// SysMemoryUsage is the total used system memory in bytes.
+	SysMemoryUsage uint64 `json:"sys_memory_usage" yaml:"sys_memory_usage"`
+	// TotalMemory is the really total memory, cgroup memory limit or system total memory.
+	TotalMemory uint64 `json:"total_memory" yaml:"total_memory"`
+	// MemoryUsage is the real memory usage, cgroup memory usage or system memory usage.
+	MemoryUsage uint64 `json:"memory_usage" yaml:"memory_usage"`
+}
+
+// GetMemoryStats returns the memory statistics of system,and the current process.
+func GetMemoryStats() MemoryStats {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+
+	return MemoryStats{
+		MemStats:       ms,
+		SysTotalMemory: SysFreeMemory(),
+		SysMemoryUsage: SysMemoryUsage(),
+		TotalMemory:    TotalMemory(),
+		MemoryUsage:    MemoryUsage(),
 	}
 }
