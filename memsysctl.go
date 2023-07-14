@@ -1,6 +1,6 @@
 //go:build darwin || freebsd || openbsd || dragonfly || netbsd
 
-package cgroup_stats
+package hwstats
 
 import (
 	"syscall"

@@ -1,4 +1,4 @@
-package cgroup_stats
+package hwstats
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 )
 
 func TestMemory(t *testing.T) {
-	t.Log("TotalMemory:", prettyByteSize(TotalMemory()))
-	t.Log("FreeMemory:", prettyByteSize(FreeMemory()))
+	t.Log("SysTotalMemory:", prettyByteSize(SysTotalMemory()))
+	t.Log("SysFreeMemory:", prettyByteSize(SysFreeMemory()))
 }
 
 func TestCpu(t *testing.T) {

@@ -1,6 +1,6 @@
 //go:build windows
 
-package cgroup_stats
+package hwstats
 
 import (
 	"syscall"
@@ -57,4 +57,25 @@ func sysFreeMemory() uint64 {
 		return 0
 	}
 	return msx.ullAvailPhys
+}
+
+func sysMemoryUsage() uint64 {
+	kernel32, err := syscall.LoadDLL("kernel32.dll")
+	if err != nil {
+		return 0
+	}
+	// GetPhysicallyInstalledSystemMemory is simpler, but broken on
+	// older versions of windows (and uses this under the hood anyway).
+	globalMemoryStatusEx, err := kernel32.FindProc("GlobalMemoryStatusEx")
+	if err != nil {
+		return 0
+	}
+	msx := &memStatusEx{
+		dwLength: 64,
+	}
+	r, _, _ := globalMemoryStatusEx.Call(uintptr(unsafe.Pointer(msx)))
+	if r == 0 {
+		return 0
+	}
+	return msx.ullTotalPhys - msx.ullAvailPhys
 }

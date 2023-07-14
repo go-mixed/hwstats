@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// GetMemoryLimit returns cgroup memory limit
+// GetMemoryLimit returns cgroup memory limit from "memory.limit_in_bytes" file.
 func GetMemoryLimit() int64 {
 	// Try determining the amount of memory inside docker container.
 	// See https://stackoverflow.com/questions/42187085/check-mem-limit-within-a-docker-container
@@ -13,51 +13,69 @@ func GetMemoryLimit() int64 {
 	// Read memory limit according to https://unix.stackexchange.com/questions/242718/how-to-find-out-how-much-memory-lxc-container-is-allowed-to-consume
 	// This should properly determine the limit inside lxc container.
 	// See https://github.com/VictoriaMetrics/VictoriaMetrics/issues/84
-	n, err := getMemStat("memory.limit_in_bytes")
-	if err == nil {
-		return n
-	}
-	n, err = getMemStatV2("memory.max")
-	if err != nil {
-		return 0
-	}
-	return n
+	return getMemStat("memory.limit_in_bytes", "memory.max")
 }
 
-func getMemStatV2(statName string) (int64, error) {
-	// See https: //www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#memory-interface-files
-	return getStatGeneric(statName, "/sys/fs/cgroup", "/proc/self/cgroup", "")
+// GetMemoryUsage returns memory usage from "memory.usage_in_bytes" file.
+func GetMemoryUsage() int64 {
+	return getMemStat("memory.usage_in_bytes", "memory.current")
 }
 
-func getMemStat(statName string) (int64, error) {
-	return getStatGeneric(statName, "/sys/fs/cgroup/memory", "/proc/self/cgroup", "memory")
+// GetMemoryFailcnt returns memory failcnt from "memory.failcnt" file.
+func GetMemoryFailcnt() int64 {
+	return getMemStat("memory.failcnt", "")
 }
 
-// GetHierarchicalMemoryLimit returns hierarchical memory limit
+// GetMemoryMaxUsage returns maximum memory usage from "memory.max_usage_in_bytes" file.
+func GetMemoryMaxUsage() int64 {
+	return getMemStat("memory.max_usage_in_bytes", "memory.max_usage")
+}
+
+// GetMemoryHierarchicalLimit returns hierarchical memory limit from "memory.hierarchical_memory_limit" file.
+func GetMemoryHierarchicalLimit() int64 {
+	return getMemStat("memory.hierarchical_memory_limit", "memory.high")
+}
+
+func GetMemoryOOMControl() int64 {
+	return getMemStat("memory.oom_control", "memory.oom_kill_disable")
+}
+
+// GetHierarchicalMemoryLimit returns hierarchical memory limit from "memory.stat" file.
 // https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
 func GetHierarchicalMemoryLimit() int64 {
 	// See https://github.com/VictoriaMetrics/VictoriaMetrics/issues/699
-	n, err := getHierarchicalMemoryLimit("/sys/fs/cgroup/memory", "/proc/self/cgroup")
+	data, err := getFileContents("memory.stat", "/sys/fs/cgroup/memory", "/proc/self/cgroup", "memory")
+	if err != nil {
+		return 0
+	}
+	memStat, err := grepFirstMatch(data, "hierarchical_memory_limit", 1, " ")
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.ParseInt(memStat, 10, 64)
+	return n
+}
+
+func getMemStat(statFileName string, v2StatFileName string) int64 {
+	n, err := getStatGeneric(statFileName, "/sys/fs/cgroup/memory", "/proc/self/cgroup", "memory")
+	if err == nil {
+		return n
+	}
+
+	if v2StatFileName == "" {
+		return 0
+	}
+
+	// See https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#memory-interface-files
+	n, err = getStatGeneric(v2StatFileName, "/sys/fs/cgroup", "/proc/self/cgroup", "")
 	if err != nil {
 		return 0
 	}
 	return n
 }
 
-func getHierarchicalMemoryLimit(sysfsPrefix, cgroupPath string) (int64, error) {
-	data, err := getFileContents("memory.stat", sysfsPrefix, cgroupPath, "memory")
-	if err != nil {
-		return 0, err
-	}
-	memStat, err := grepFirstMatch(data, "hierarchical_memory_limit", 1, " ")
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(memStat, 10, 64)
-}
-
+// MemoryStat https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
 type MemoryStat struct {
-	// See https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt for description.
 	Cache                   int64 `json:"cache" yaml:"cache" mapstructure:"cache"`
 	Rss                     int64 `json:"rss" yaml:"rss" mapstructure:"rss"`
 	RssHuge                 int64 `json:"rss_huge" yaml:"rss_huge" mapstructure:"rss_huge"`
@@ -107,8 +125,10 @@ func GetMemoryStat() (*MemoryStat, error) {
 	lines := strings.Split(data, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		segment := strings.Split(line, " ")
-		m[segment[0]], _ = strconv.ParseInt(segment[1], 10, 64)
+		segments := strings.Split(line, " ")
+		if len(segments) >= 2 {
+			m[segments[0]], _ = strconv.ParseInt(segments[1], 10, 64)
+		}
 	}
 
 	return &MemoryStat{
@@ -148,5 +168,127 @@ func GetMemoryStat() (*MemoryStat, error) {
 		TotalInactiveFile:       m["total_inactive_file"],
 		TotalActiveFile:         m["total_active_file"],
 		TotalUnevictable:        m["total_unevictable"],
+	}, nil
+}
+
+// MemoryStatV2 https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#memory.stat
+type MemoryStatV2 struct {
+	Anon                   int64 `json:"anon" yaml:"anon" mapstructure:"anon"`
+	File                   int64 `json:"file" yaml:"file" mapstructure:"file"`
+	Kernel                 int64 `json:"kernel" yaml:"kernel" mapstructure:"kernel"`
+	KernelStack            int64 `json:"kernel_stack" yaml:"kernel_stack" mapstructure:"kernel_stack"`
+	PageTables             int64 `json:"pagetables" yaml:"pagetables" mapstructure:"pagetables"`
+	SecPageTables          int64 `json:"sec_pagetables" yaml:"sec_pagetables" mapstructure:"sec_pagetables"`
+	PerCPU                 int64 `json:"percpu" yaml:"per_cpu" mapstructure:"percpu"`
+	Sock                   int64 `json:"sock" yaml:"sock" mapstructure:"sock"`
+	Shmem                  int64 `json:"shmem" yaml:"shmem" mapstructure:"shmem"`
+	ZSwap                  int64 `json:"zswap" yaml:"zswap" mapstructure:"zswap"`
+	ZSwapped               int64 `json:"zswapped" yaml:"zswapped" mapstructure:"zswapped"`
+	FileMapped             int64 `json:"file_mapped" yaml:"file_mapped" mapstructure:"file_mapped"`
+	FileDirty              int64 `json:"file_dirty" yaml:"file_dirty" mapstructure:"file_dirty"`
+	FileWriteback          int64 `json:"file_writeback" yaml:"file_writeback" mapstructure:"file_writeback"`
+	SwapCached             int64 `json:"swapcached" yaml:"swapcached" mapstructure:"swapcached"`
+	AnonThp                int64 `json:"anon_thp" yaml:"anon_thp" mapstructure:"anon_thp"`
+	FileThp                int64 `json:"file_thp" yaml:"file_thp" mapstructure:"file_thp"`
+	ShmemThp               int64 `json:"shmem_thp" yaml:"shmem_thp" mapstructure:"shmem_thp"`
+	InactiveAnon           int64 `json:"inactive_anon" yaml:"inactive_anon" mapstructure:"inactive_anon"`
+	ActiveAnon             int64 `json:"active_anon" yaml:"active_anon" mapstructure:"active_anon"`
+	InactiveFile           int64 `json:"inactive_file" yaml:"inactive_file" mapstructure:"inactive_file"`
+	ActiveFile             int64 `json:"active_file" yaml:"active_file" mapstructure:"active_file"`
+	SlabReclaimable        int64 `json:"slab_reclaimable" yaml:"slab_reclaimable" mapstructure:"slab_reclaimable"`
+	SlabUnreclaimable      int64 `json:"slab_unreclaimable" yaml:"slab_unreclaimable" mapstructure:"slab_unreclaimable"`
+	Slab                   int64 `json:"slab" yaml:"slab" mapstructure:"slab"`
+	WorkingsetRefaultAnon  int64 `json:"workingset_refault_anon" yaml:"workingset_refault_anon" mapstructure:"workingset_refault_anon"`
+	WorkingsetRefaultFile  int64 `json:"workingset_refault_file" yaml:"workingset_refault_file" mapstructure:"workingset_refault_file"`
+	WorkingsetActivateAnon int64 `json:"workingset_activate_anon" yaml:"workingset_activate_anon" mapstructure:"workingset_activate_anon"`
+	WorkingsetActivateFile int64 `json:"workingset_activate_file" yaml:"workingset_activate_file" mapstructure:"workingset_activate_file"`
+	WorkingsetRestoreAnon  int64 `json:"workingset_restore_anon" yaml:"workingset_restore_anon" mapstructure:"workingset_restore_anon"`
+	WorkingsetRestoreFile  int64 `json:"workingset_restore_file" yaml:"workingset_restore_file" mapstructure:"workingset_restore_file"`
+	WorkingsetNodereclaim  int64 `json:"workingset_nodereclaim" yaml:"workingset_nodereclaim" mapstructure:"workingset_nodereclaim"`
+	PgScan                 int64 `json:"pgscan" yaml:"pgscan" mapstructure:"pgscan"`
+	PgSteal                int64 `json:"pgsteal" yaml:"pgsteal" mapstructure:"pgsteal"`
+	PgScanKswapd           int64 `json:"pgscan_kswapd" yaml:"pgscan_kswapd" mapstructure:"pgscan_kswapd"`
+	PgScanDirect           int64 `json:"pgscan_direct" yaml:"pgscan_direct" mapstructure:"pgscan_direct"`
+	PgScanKhugepaged       int64 `json:"pgscan_khugepaged" yaml:"pgscan_khugepaged" mapstructure:"pgscan_khugepaged"`
+	PgStealKswapd          int64 `json:"pgsteal_kswapd" yaml:"pgsteal_kswapd" mapstructure:"pgsteal_kswapd"`
+	PgStealDirect          int64 `json:"pgsteal_direct" yaml:"pgsteal_direct" mapstructure:"pgsteal_direct"`
+	PgStealKhugepaged      int64 `json:"pgsteal_khugepaged" yaml:"pgsteal_khugepaged" mapstructure:"pgsteal_khugepaged"`
+	PgFault                int64 `json:"pgfault" yaml:"pgfault" mapstructure:"pgfault"`
+	PgMajFault             int64 `json:"pgmajfault" yaml:"pgmajfault" mapstructure:"pgmajfault"`
+	PgRefill               int64 `json:"pgrefill" yaml:"pgrefill" mapstructure:"pgrefill"`
+	PgActivate             int64 `json:"pgactivate" yaml:"pgactivate" mapstructure:"pgactivate"`
+	PgDeactivate           int64 `json:"pgdeactivate" yaml:"pgdeactivate" mapstructure:"pgdeactivate"`
+	PgLazyfree             int64 `json:"pglazyfree" yaml:"pglazyfree" mapstructure:"pglazyfree"`
+	PgLazyfreed            int64 `json:"pglazyfreed" yaml:"pglazyfreed" mapstructure:"pglazyfreed"`
+	ThpFaultAlloc          int64 `json:"thp_fault_alloc" yaml:"thp_fault_alloc" mapstructure:"thp_fault_alloc"`
+	ThpCollapseAlloc       int64 `json:"thp_collapse_alloc" yaml:"thp_collapse_alloc" mapstructure:"thp_collapse_alloc"`
+}
+
+func GetMemoryStatV2() (*MemoryStatV2, error) {
+	data, err := getFileContents("memory.stat", "/sys/fs/cgroup", "/proc/self/cgroup", "")
+	if err != nil {
+		return nil, err
+	}
+
+	m := map[string]int64{}
+	lines := strings.Split(data, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		segments := strings.Split(line, " ")
+		if len(segments) >= 2 {
+			m[segments[0]], _ = strconv.ParseInt(segments[1], 10, 64)
+		}
+	}
+
+	return &MemoryStatV2{
+		Anon:                   m["anon"],
+		File:                   m["file"],
+		Kernel:                 m["kernel"],
+		KernelStack:            m["kernel_stack"],
+		PageTables:             m["pagetables"],
+		SecPageTables:          m["secpagetables"],
+		PerCPU:                 m["percpu"],
+		Sock:                   m["sock"],
+		Shmem:                  m["shmem"],
+		ZSwap:                  m["zswap"],
+		ZSwapped:               m["zswapped"],
+		FileMapped:             m["file_mapped"],
+		FileDirty:              m["file_dirty"],
+		FileWriteback:          m["file_writeback"],
+		SwapCached:             m["swapcached"],
+		AnonThp:                m["anon_thp"],
+		FileThp:                m["file_thp"],
+		ShmemThp:               m["shmem_thp"],
+		InactiveAnon:           m["inactive_anon"],
+		ActiveAnon:             m["active_anon"],
+		InactiveFile:           m["inactive_file"],
+		ActiveFile:             m["active_file"],
+		SlabReclaimable:        m["slab_reclaimable"],
+		SlabUnreclaimable:      m["slab_unreclaimable"],
+		Slab:                   m["slab"],
+		WorkingsetRefaultAnon:  m["workingset_refault_anon"],
+		WorkingsetRefaultFile:  m["workingset_refault_file"],
+		WorkingsetActivateAnon: m["workingset_activate_anon"],
+		WorkingsetActivateFile: m["workingset_activate_file"],
+		WorkingsetRestoreAnon:  m["workingset_restore_anon"],
+		WorkingsetRestoreFile:  m["workingset_restore_file"],
+		WorkingsetNodereclaim:  m["workingset_nodereclaim"],
+		PgScan:                 m["pgscan"],
+		PgSteal:                m["pgsteal"],
+		PgScanKswapd:           m["pgscan_kswapd"],
+		PgScanDirect:           m["pgscan_direct"],
+		PgScanKhugepaged:       m["pgscan_khugepaged"],
+		PgStealKswapd:          m["pgsteal_kswapd"],
+		PgStealDirect:          m["pgsteal_direct"],
+		PgStealKhugepaged:      m["pgsteal_khugepaged"],
+		PgFault:                m["pgfault"],
+		PgMajFault:             m["pgmajfault"],
+		PgRefill:               m["pgrefill"],
+		PgActivate:             m["pgactivate"],
+		PgDeactivate:           m["pgdeactivate"],
+		PgLazyfree:             m["pglazyfree"],
+		PgLazyfreed:            m["pglazyfreed"],
+		ThpFaultAlloc:          m["thp_fault_alloc"],
+		ThpCollapseAlloc:       m["thp_collapse_alloc"],
 	}, nil
 }

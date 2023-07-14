@@ -1,6 +1,6 @@
 //go:build darwin
 
-package cgroup_stats
+package hwstats
 
 import (
 	"os/exec"
@@ -46,4 +46,8 @@ func sysFreeMemory() uint64 {
 		}
 	}
 	return freePages * pageSize
+}
+
+func sysMemoryUsage() uint64 {
+	return sysTotalMemory() - sysFreeMemory()
 }

@@ -1,4 +1,4 @@
-package cgroup_stats
+package hwstats
 
 import (
 	"os"

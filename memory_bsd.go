@@ -1,6 +1,6 @@
 //go:build freebsd || openbsd || dragonfly || netbsd
 
-package cgroup_stats
+package hwstats
 
 func sysTotalMemory() uint64 {
 	s, err := sysctlUint64("hw.physmem")
@@ -16,4 +16,8 @@ func sysFreeMemory() uint64 {
 		return 0
 	}
 	return s
+}
+
+func sysMemoryUsage() uint64 {
+	return sysTotalMemory() - sysFreeMemory()
 }
