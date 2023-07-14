@@ -160,12 +160,12 @@ func DumpAll(dir string, callback func(path string)) error {
 	}, filepath.Join(dir, "memory.txt"), callback)
 
 	dumpFile(func(writer io.Writer) error {
-		return DumpStackTrace(writer, 2)
-	}, filepath.Join(dir, "stack-trace.txt"), callback)
+		return DumpStackTrace(writer, 0)
+	}, filepath.Join(dir, "stack-trace.profile"), callback)
 
 	dumpFile(func(writer io.Writer) error {
 		return DumpHeapProfile(writer)
-	}, filepath.Join(dir, "heap-profile.txt"), callback)
+	}, filepath.Join(dir, "heap.profile"), callback)
 
 	dumpFile(func(writer io.Writer) error {
 		DumpGoroutine(writer)
@@ -173,30 +173,30 @@ func DumpAll(dir string, callback func(path string)) error {
 	}, filepath.Join(dir, "goroutine.txt"), callback)
 
 	dumpFile(func(writer io.Writer) error {
-		return DumpBlock(writer, 2)
-	}, filepath.Join(dir, "block.txt"), callback)
+		return DumpBlock(writer, 0)
+	}, filepath.Join(dir, "block.profile"), callback)
 
 	dumpFile(func(writer io.Writer) error {
-		return DumpMutex(writer, 2)
-	}, filepath.Join(dir, "mutex.txt"), callback)
+		return DumpMutex(writer, 0)
+	}, filepath.Join(dir, "mutex.profile"), callback)
 
 	dumpFile(func(writer io.Writer) error {
-		return DumpThreadCreate(writer, 2)
-	}, filepath.Join(dir, "thread-create.txt"), callback)
+		return DumpThreadCreate(writer, 0)
+	}, filepath.Join(dir, "thread-create.profile"), callback)
 
 	dumpFile(func(writer io.Writer) error {
-		return DumpAllocs(writer, 2)
-	}, filepath.Join(dir, "allocs.txt"), callback)
+		return DumpAllocs(writer, 0)
+	}, filepath.Join(dir, "allocs.profile"), callback)
 
 	// 30s for cpu profile
 	dumpFile(func(writer io.Writer) error {
 		return DumpCPUProfile(writer, 0)
-	}, filepath.Join(dir, "cpu-profile.txt"), callback)
+	}, filepath.Join(dir, "cpu-profile.profile"), callback)
 
 	// 5s for trace profile
 	dumpFile(func(writer io.Writer) error {
 		return DumpTraceProfile(writer, 0)
-	}, filepath.Join(dir, "trace-profile.txt"), callback)
+	}, filepath.Join(dir, "trace-profile.profile"), callback)
 
 	return nil
 }
