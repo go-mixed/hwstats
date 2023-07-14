@@ -20,7 +20,7 @@ func CgroupPath() string {
 	// 5:memory:/
 	// 4:blkio:/
 	// 3:cpuacct:/
-	// 2:cpu:/
+	// 2:cpu:/         // k8s is this: 5:cpu,cpuacct:/...
 	// 1:cpuset:/
 	// 0::/
 	content, err := os.ReadFile("/proc/self/cgroup")
@@ -28,7 +28,16 @@ func CgroupPath() string {
 		return "/"
 	}
 
-	cgroupPath, err := grepFirstMatch(string(content), "0::/", 2, ":")
+	// check memory first because it is the most common cgroup
+	cgroupPath, err := grepFirstMatch(string(content), "memory", 2, ":")
+	if err != nil {
+		return "/"
+	} else if cgroupPath != "/" {
+		return cgroupPath
+	}
+
+	// check cpu/cpuset second because it is the second most common cgroup
+	cgroupPath, err = grepFirstMatch(string(content), "cpu", 2, ":")
 	if err != nil {
 		return "/"
 	}

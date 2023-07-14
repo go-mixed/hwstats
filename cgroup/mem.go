@@ -17,6 +17,7 @@ func GetMemoryLimit() int64 {
 }
 
 // GetMemoryUsage returns memory usage from "memory.usage_in_bytes" file.
+// memory.usage_in_bytes ~= free.used + free.(buff/cache) - (buff)
 func GetMemoryUsage() int64 {
 	return getMemStat("memory.usage_in_bytes", "memory.current")
 }

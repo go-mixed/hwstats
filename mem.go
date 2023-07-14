@@ -55,7 +55,7 @@ func TotalMemory() uint64 {
 }
 
 // MemoryUsage returns the real memory usage, if run in cgroup, it will return
-// the cgroup memory usage, otherwise it will return the system memory usage
+// the cgroup memory RSS+Cache usage, otherwise it will return the system memory usage
 func MemoryUsage() uint64 {
 	if cgroup.RunInCgroup() {
 		if memStat, err := cgroup.GetMemoryStat(); err != nil {

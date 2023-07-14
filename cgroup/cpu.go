@@ -41,8 +41,13 @@ func getCPUQuotaGeneric() (float64, error) {
 	return getCPUQuotaV2("/sys/fs/cgroup", "/proc/self/cgroup")
 }
 
-func getCPUStat(statName string) (int64, error) {
-	return getStatGeneric(statName, "/sys/fs/cgroup/cpu", "/proc/self/cgroup", "cpu,")
+func getCPUStat(statFileName string) (int64, error) {
+	n, err := getStatGeneric(statFileName, "/sys/fs/cgroup/cpu", "/proc/self/cgroup", "cpu,") // kubernetes
+	if err != nil {
+		n, err = getStatGeneric(statFileName, "/sys/fs/cgroup/cpu", "/proc/self/cgroup", "cpu/") // docker
+	}
+
+	return n, err
 }
 
 func getOnlineCPUCount() float64 {
