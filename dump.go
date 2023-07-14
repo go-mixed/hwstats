@@ -151,6 +151,8 @@ func DumpGoroutine(writer io.Writer) {
 	_, _ = fmt.Fprintf(writer, "num CPU: %v\n", runtime.NumCPU())
 }
 
+// DumpAll dumps the memory, goroutine and stack trace into files.
+// write an error file named "dump-name.err" if any error occurs
 func DumpAll(dir string, callback func(path string)) error {
 	err := os.MkdirAll(dir, 0)
 	if err != nil {
